@@ -34,8 +34,6 @@
 #include <limits>
 #include <algorithm>
 
-#include <QtDebug>
-
 /*!
  * \brief Generates random data.
  */
@@ -126,7 +124,6 @@ const EVP_MD *openSSLDigest(const QString &d)
     } else if (d.compare(QLatin1String("SHA-224"), Qt::CaseInsensitive) == 0) {
         return EVP_sha224();
     } else if (d.compare(QLatin1String("SHA-256"), Qt::CaseInsensitive) == 0) {
-        qDebug() << "SHA256";
         return EVP_sha256();
     } else if (d.compare(QLatin1String("SHA-384"), Qt::CaseInsensitive) == 0) {
         return EVP_sha384();
@@ -272,13 +269,13 @@ int main(int argc, char *argv[])
         QDateTime t;
         int tt = 0;
 
-        if (impl == QLatin1String("cutelyst")) {
+        if (impl.compare(QLatin1String("cutelyst"), Qt::CaseInsensitive) == 0) {
 
             t = QDateTime::currentDateTime();
             pbkdf2Cutelyst(cld, pw, salt, rounds, keyLength);
             tt = t.msecsTo(QDateTime::currentDateTime());
 
-        } else if (impl == QLatin1String("openssl")) {
+        } else if (impl.compare(QLatin1String("openssl"), Qt::CaseInsensitive) == 0) {
 
             unsigned char *out;
             out = (unsigned char *) malloc(sizeof(unsigned char) * keyLength);
