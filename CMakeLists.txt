@@ -7,7 +7,11 @@ set(PBKDF2TEST_VERSION_MINOR "0")
 set(PBKDF2TEST_VERSION_PATCH "2")
 set(PBKDF2TEST_VERSION "${PBKDF2TEST_VERSION_MAJOR}.${PBKDF2TEST_VERSION_MINOR}.${PBKDF2TEST_VERSION_PATCH}")
 
-find_package(Qt5 5.1.0 COMPONENTS Core)
+find_package(Qt5 5.1.0 REQUIRED COMPONENTS Core)
+find_package(OpenSSL REQUIRED)
+if (OPENSSL_FOUND)
+    message(STATUS "OpenSSL: ${OPENSSL_VERSION}")
+endif (OPENSSL_FOUND)
 
 # Auto generate moc files
 set(CMAKE_AUTOMOC ON)
@@ -40,6 +44,7 @@ add_executable(pbkdf2test ${pbkdf2test_SRCS})
 
 target_link_libraries(pbkdf2test
     Qt5::Core
+    ${OPENSSL_LIBRARIES}
 )
 
 
