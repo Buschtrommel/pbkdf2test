@@ -20,8 +20,7 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Skaffari default install prefix" FORCE)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
-set(CMAKE_INSTALL_BINDIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Directory to install skaffarictl")
-set(CMAKE_INSTALL_DOCDIR "${CMAKE_INSTALL_DATADIR}/doc/skaffari" CACHE PATH "Directory to install documentation")
+set(CMAKE_INSTALL_BINDIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Directory to install pbkdf2test executable.")
 
 # Enable C++11 features
 add_definitions(-std=c++11)
@@ -42,3 +41,6 @@ add_executable(pbkdf2test ${pbkdf2test_SRCS})
 target_link_libraries(pbkdf2test
     Qt5::Core
 )
+
+
+install(TARGETS pbkdf2test DESTINATION ${CMAKE_INSTALL_BINDIR})
