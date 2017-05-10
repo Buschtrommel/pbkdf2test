@@ -45,6 +45,7 @@ add_executable(pbkdf2test ${pbkdf2test_SRCS})
 target_link_libraries(pbkdf2test
     Qt5::Core
     ${OPENSSL_LIBRARIES}
+    crypt
 )
 
 

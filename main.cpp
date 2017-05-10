@@ -17,6 +17,8 @@
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#define _XOPEN_SOURCE
+#include <unistd.h>
 #include <QCoreApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -33,27 +35,45 @@
 #include <stdlib.h>
 #include <limits>
 #include <algorithm>
+#include <QDebug>
 
 /*!
  * \brief Generates random data.
  */
-static QByteArray genRand(qint64 size, bool b64 = true)
+static QByteArray genRand(qint64 size, bool b64 = true, const QByteArray &allowedChars = QByteArray())
 {
     QByteArray salt;
 
     QFile random(QStringLiteral("/dev/urandom"));
     if (!random.open(QIODevice::ReadOnly)) {
-        if (b64) {
-            salt = QUuid::createUuid().toByteArray().toBase64();
-        } else {
-            salt = QUuid::createUuid().toByteArray();
-        }
-    } else {
+        return salt;
+    }
+
+    if (allowedChars.isEmpty()) {
         if (b64) {
             salt = random.read(size).toBase64();
         } else {
             salt = random.read(size);
         }
+    } else {
+        QByteArray rand;
+        if (b64) {
+            rand = random.read(size * 4).toBase64();
+        } else {
+            rand = random.read(size * 4);
+        }
+        int i = 0;
+        while ((salt.size() < size) && (i < (4 * size))) {
+            char part = rand.at(i);
+            if (allowedChars.contains(part)) {
+                salt.append(part);
+            }
+            ++i;
+        }
+    }
+
+    if (salt.size() > size) {
+        salt.chop(salt.size() - size);
     }
 
     return salt;
@@ -165,6 +185,65 @@ QCryptographicHash::Algorithm cutelystDigest(const QString &d)
     }
 }
 
+std::pair<QByteArray, uint> cryptSettings(const QString &d, const QByteArray &salt, quint32 rounds)
+{
+    std::pair<QByteArray, uint> settings;
+
+    QByteArray setba;
+
+    if ((d.compare(QLatin1String("SHA-256"), Qt::CaseInsensitive) == 0) || (d.compare(QLatin1String("SHA-512"), Qt::CaseInsensitive) == 0)) {
+
+        if (d.compare(QLatin1String("SHA-512"), Qt::CaseInsensitive) == 0) {
+            setba = QByteArrayLiteral("$6$rounds=");
+        } else {
+            setba = QByteArrayLiteral("$5$rounds=");
+        }
+
+        if (rounds < 1000) {
+            rounds = 1000;
+        } else if (rounds > 999999999) {
+            rounds = 999999999;
+        }
+
+        setba.append(QByteArray::number(rounds));
+        setba.append(QByteArrayLiteral("$"));
+        setba.append(salt);
+        setba.append(QByteArrayLiteral("$"));
+
+        settings.first = setba;
+
+        if (d.compare(QLatin1String("SHA-512"), Qt::CaseInsensitive) == 0) {
+            settings.second = (setba.size() + 86);
+        } else {
+            settings.second = (setba.size() + 43);
+        }
+
+    } else {
+
+        settings.second = 60;
+        setba = QByteArrayLiteral("$2y$");
+
+        if (rounds < 4) {
+            rounds = 4;
+        }
+        if (rounds > 31) {
+            rounds = 31;
+        }
+        if (rounds < 10) {
+            setba.append(QByteArrayLiteral("0"));
+        }
+
+        setba.append(QByteArray::number(rounds));
+        setba.append(QByteArrayLiteral("$"));
+        setba.append(salt);
+        setba.append(QByteArrayLiteral("$"));
+
+        settings.first = setba;
+    }
+
+    return settings;
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
@@ -183,6 +262,10 @@ int main(int argc, char *argv[])
         QStringLiteral("Whirlpool"), QStringLiteral("RIPEMD-160")
     };
 
+    const QStringList supMdCrypt = {
+        QStringLiteral("SHA-256"), QStringLiteral("SHA-512"), QStringLiteral("bcrypt")
+    };
+
 
     QCommandLineParser parser;
     parser.addHelpOption();
@@ -190,10 +273,10 @@ int main(int argc, char *argv[])
 
     parser.setApplicationDescription(app.applicationName() + QStringLiteral(" version ") + app.applicationVersion() + QStringLiteral(" Copyright (C) 2017 Matthias Fehring <kontakt@buschmann23.de>\n") + app.applicationName() + QStringLiteral(" comes with ABSOLUTELY NO WARRANTY.\nThis is free software, and you are welcome to redistribute it under the conditions of\nthe GNU General Public License, Version 2."));
 
-    QCommandLineOption i(QStringList({QStringLiteral("implementation"), QStringLiteral("i")}), QStringLiteral("The implementation that should be used. Currently available: OpenSSL, Cutelyst. Default: OpenSSL"), QStringLiteral("impl"), QStringLiteral("OpenSSL"));
+    QCommandLineOption i(QStringList({QStringLiteral("implementation"), QStringLiteral("i")}), QStringLiteral("The implementation that should be used. Currently available: OpenSSL, crypt, Cutelyst. Default: OpenSSL"), QStringLiteral("impl"), QStringLiteral("OpenSSL"));
     parser.addOption(i);
 
-    QCommandLineOption d(QStringList({QStringLiteral("digest"), QStringLiteral("d")}), QStringLiteral("The message digest function to use in the derivation. Default: SHA-256\n\nSuported by OpenSSL: %1\n\nSupported by Cutelyst: %2").arg(supMdOpenssl.join(QStringLiteral(", ")), supMdCutelyst.join(QStringLiteral(", "))), QStringLiteral("digest"), QStringLiteral("SHA-256"));
+    QCommandLineOption d(QStringList({QStringLiteral("digest"), QStringLiteral("d")}), QStringLiteral("The message digest function to use in the derivation. Default: SHA-256\n\nSuported by OpenSSL: %1\n\nSupported by crpyt: %2\nSupported by Cutelyst: %3").arg(supMdOpenssl.join(QStringLiteral(", ")), supMdCrypt.join(QStringLiteral(", ")), supMdCutelyst.join(QStringLiteral(", "))), QStringLiteral("digest"), QStringLiteral("SHA-256"));
     parser.addOption(d);
 
     QCommandLineOption sl(QStringList({QStringLiteral("salt-length"), QStringLiteral("sl")}), QStringLiteral("Length of the salt to use in bytes. Default: 24"), QStringLiteral("slength"), QStringLiteral("24"));
@@ -205,11 +288,14 @@ int main(int argc, char *argv[])
     QCommandLineOption tTime(QStringList({QStringLiteral("target-time"), QStringLiteral("t")}), QStringLiteral("Time the password encryption should use approximately in milliseconds. Default: 500"), QStringLiteral("ms"), QStringLiteral("500"));
     parser.addOption(tTime);
 
+    QCommandLineOption r(QStringList({QStringLiteral("rounds"), QStringLiteral("r")}), QStringLiteral("Number of iterations/rounds to use. If bcrypt it defaults to 10, otherwise to 30000."), QStringLiteral("iterations"), QStringLiteral("30000"));
+    parser.addOption(r);
+
     parser.process(app);
 
     const QString impl = parser.value(i);
     const QStringList supImp = {
-        QStringLiteral("openssl"), QStringLiteral("cutelyst")
+        QStringLiteral("openssl"), QStringLiteral("crypt"), QStringLiteral("cutelyst")
     };
     if (!supImp.contains(impl, Qt::CaseInsensitive)) {
         printf("%s is not a supported implementation.\n", qUtf8Printable(impl));
@@ -227,24 +313,43 @@ int main(int argc, char *argv[])
 
     if (impl.compare(QLatin1String("openssl"), Qt::CaseInsensitive) == 0) {
         if (!supMdOpenssl.contains(md, Qt::CaseInsensitive)) {
-            printf("%s is not suppoerted by OpenSSL.\n", qUtf8Printable(md));
+            printf("%s is not supported by OpenSSL.\n", qUtf8Printable(md));
             return 1;
         }
     }
 
+    if (impl.compare(QLatin1String("crypt"), Qt::CaseInsensitive) == 0) {
+        if (!supMdCrypt.contains(md, Qt::CaseInsensitive)) {
+            printf("%s is not supported by crypt.\n", qUtf8Printable(md));
+        }
+    }
 
-    const int saltLength = abs(parser.value(sl).toInt());
-    const int keyLength = abs(parser.value(kl).toInt());
+
+    int saltLength = abs(parser.value(sl).toInt());
+    int keyLength = abs(parser.value(kl).toInt());
     const int targetTime = abs(parser.value(tTime).toInt());
     const int testCount = 100;
-    const int rounds = 30000;
+    int rounds = abs(parser.value(r).toInt());
+    QByteArray allowedSaltChars;
+
+    if (impl.compare(QLatin1String("crypt"), Qt::CaseInsensitive) == 0) {
+        allowedSaltChars = QByteArrayLiteral("./0123456789ABCDEFGHIJKLMNJOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+        if (md.compare(QLatin1String("bcrypt"), Qt::CaseInsensitive) == 0) {
+            if ((rounds < 4) || (rounds > 31)) {
+                rounds = 10;
+            }
+            saltLength = 22;
+        } else {
+            saltLength = 16;
+        }
+    }
 
     printf("Implementation:        %s\n", qUtf8Printable(impl));
     printf("Message digest:        %s\n", qUtf8Printable(md));
     printf("Salt size:             %u bytes\n", saltLength);
     printf("Key length:            %u bytes\n", keyLength);
     printf("Target time:           %u ms\n", targetTime);
-    printf("Generating %u PBKDF2 hashes with %u iterations.\n", testCount, rounds);
+    printf("Generating %u hashes with %u iterations.\n", testCount, rounds);
     printf("--------------------------------------------------------------\n");
 
     QByteArrayList passwords;
@@ -252,7 +357,7 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < testCount; ++i) {
         passwords.append(genRand(10));
-        salts.append(genRand(saltLength));
+        salts.append(genRand(saltLength, true, allowedSaltChars));
     }
 
     int totalTime = 0;
@@ -272,8 +377,10 @@ int main(int argc, char *argv[])
         if (impl.compare(QLatin1String("cutelyst"), Qt::CaseInsensitive) == 0) {
 
             t = QDateTime::currentDateTime();
-            pbkdf2Cutelyst(cld, pw, salt, rounds, keyLength);
+            const QByteArray res = pbkdf2Cutelyst(cld, pw, salt, rounds, keyLength);
             tt = t.msecsTo(QDateTime::currentDateTime());
+            printf("%s %ims\r", res.toBase64().constData(), tt);
+            fflush(stdout);
 
         } else if (impl.compare(QLatin1String("openssl"), Qt::CaseInsensitive) == 0) {
 
@@ -284,22 +391,44 @@ int main(int argc, char *argv[])
             const char *ccpw = pw.constData();
             int ccpwsize = pw.size();
             t = QDateTime::currentDateTime();
-            PKCS5_PBKDF2_HMAC(ccpw, ccpwsize, usalt, usaltsize, rounds, ossld, keyLength, out);
+            const int ok = PKCS5_PBKDF2_HMAC(ccpw, ccpwsize, usalt, usaltsize, rounds, ossld, keyLength, out);
             tt = t.msecsTo(QDateTime::currentDateTime());
+            if (ok) {
+                for (size_t i = 0; i < keyLength; ++i) {
+                    printf("%02x", out[i]);
+                }
+                printf(" %ims", tt);
+                printf("\r");
+            }
+            fflush(stdout);
             free(out);
+
+        } else if (impl.compare(QLatin1String("crypt"), Qt::CaseInsensitive) == 0) {
+
+            std::pair<QByteArray, uint> settings = cryptSettings(md, salt, rounds);
+            t = QDateTime::currentDateTime();
+            const char *res = crypt(pw.constData(), settings.first.constData());
+            tt = t.msecsTo(QDateTime::currentDateTime());
+            printf("%s %ims\r", res, tt);
+            fflush(stdout);
+
         }
         totalTime += tt;
         min = std::min(min, tt);
         max = std::max(max, tt);
     }
 
+    printf("                                                                                                                                                                        \r");
+
     avg = (totalTime/testCount);
 
-    printf("Total time:            %4u ms\n", totalTime);
-    printf("Minimum time:          %4u ms\n", min);
-    printf("Maximum time:          %4u ms\n", max);
-    printf("Average time:          %4u ms\n", avg);
-    printf("Proposed iterations:   %u\n", ((targetTime/avg) * rounds));
+    printf("Total time:            %5u ms\n", totalTime);
+    printf("Minimum time:          %5u ms\n", min);
+    printf("Maximum time:          %5u ms\n", max);
+    printf("Average time:          %5u ms\n", avg);
+    if (avg != 0) {
+        printf("Proposed iterations:   %u\n", ((targetTime/avg) * rounds));
+    }
 
     return 0;
 }
