@@ -152,7 +152,7 @@ const EVP_MD *openSSLDigest(const QString &d)
     } else if (d.compare(QLatin1String("RIPEMD-160"), Qt::CaseInsensitive) == 0) {
         return EVP_ripemd160();
     } else {
-        return nullptr;
+        return EVP_sha512();
     }
 }
 
@@ -166,6 +166,8 @@ QCryptographicHash::Algorithm cutelystDigest(const QString &d)
         return QCryptographicHash::Sha1;
     } else if (d.compare(QLatin1String("SHA-224"), Qt::CaseInsensitive) == 0) {
         return QCryptographicHash::Sha224;
+    } else if (d.compare(QLatin1String("SHA-256"), Qt::CaseInsensitive) == 0) {
+        return QCryptographicHash::Sha512;
     } else if (d.compare(QLatin1String("SHA-384"), Qt::CaseInsensitive) == 0) {
         return QCryptographicHash::Sha384;
     } else if (d.compare(QLatin1String("SHA-512"), Qt::CaseInsensitive) == 0) {
@@ -179,7 +181,7 @@ QCryptographicHash::Algorithm cutelystDigest(const QString &d)
     } else if (d.compare(QLatin1String("SHA3-256"), Qt::CaseInsensitive) == 0) {
         return QCryptographicHash::Sha3_512;
     } else {
-        return QCryptographicHash::Sha256;
+        return QCryptographicHash::Sha512;
     }
 }
 
@@ -274,7 +276,7 @@ int main(int argc, char *argv[])
     QCommandLineOption i(QStringList({QStringLiteral("implementation"), QStringLiteral("i")}), QStringLiteral("The implementation that should be used. Currently available: OpenSSL, crypt, Cutelyst. Default: OpenSSL"), QStringLiteral("impl"), QStringLiteral("OpenSSL"));
     parser.addOption(i);
 
-    QCommandLineOption d(QStringList({QStringLiteral("digest"), QStringLiteral("d")}), QStringLiteral("The message digest function to use in the derivation. Default: SHA-256\n\nSuported by OpenSSL: %1\n\nSupported by crpyt: %2\nSupported by Cutelyst: %3").arg(supMdOpenssl.join(QStringLiteral(", ")), supMdCrypt.join(QStringLiteral(", ")), supMdCutelyst.join(QStringLiteral(", "))), QStringLiteral("digest"), QStringLiteral("SHA-256"));
+    QCommandLineOption d(QStringList({QStringLiteral("digest"), QStringLiteral("d")}), QStringLiteral("The message digest function to use in the derivation. Default: SHA-512\n\nSuported by OpenSSL: %1\n\nSupported by crpyt: %2\nSupported by Cutelyst: %3").arg(supMdOpenssl.join(QStringLiteral(", ")), supMdCrypt.join(QStringLiteral(", ")), supMdCutelyst.join(QStringLiteral(", "))), QStringLiteral("digest"), QStringLiteral("SHA-512"));
     parser.addOption(d);
 
     QCommandLineOption sl(QStringList({QStringLiteral("salt-length"), QStringLiteral("sl")}), QStringLiteral("Length of the salt to use in bytes. Default: 24"), QStringLiteral("slength"), QStringLiteral("24"));
