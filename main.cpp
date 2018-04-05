@@ -1,6 +1,6 @@
 /*
-   pbkdf2test - find inetrations for PBKDF2
-   Copyright (C) 2017 Matthias Fehring <kontakt@buschmann23.de>
+   pbkdf2test - find iterations for PBKDF2
+   Copyright (C) 2017-2018 Matthias Fehring <mf@huessenbergnetz.de>
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License
@@ -25,17 +25,15 @@
 #include <QByteArray>
 #include <QCryptographicHash>
 #include <QFile>
-#include <QUuid>
 #include <QMessageAuthenticationCode>
 #include <QByteArrayList>
-#include <QDateTime>
 #include <QStringList>
-#include <stdio.h>
 #include <openssl/evp.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <limits>
 #include <algorithm>
-#include <QDebug>
+#include <chrono>
 
 /*!
  * \brief Generates random data.
@@ -85,8 +83,8 @@ static QByteArray genRand(qint64 size, bool b64 = true, const QByteArray &allowe
  * Derived from Cutelyst at https://github.com/cutelyst/cutelyst/blob/master/Cutelyst/Plugins/Authentication/credentialpassword.cpp
  *
  * \author Daniel Nicoletti <dantti12@gmail.com>
- * \date 2013-2015
- * \copyright GNU General Public License, Version 2
+ * \date 2013-2018
+ * \copyright GNU Lesse General Public License, Version 2.1
  * \return
  */
 static QByteArray pbkdf2Cutelyst(QCryptographicHash::Algorithm method, const QByteArray &password, const QByteArray &salt, int rounds, int keyLength)
@@ -247,8 +245,8 @@ std::pair<QByteArray, uint> cryptSettings(const QString &d, const QByteArray &sa
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
-    app.setOrganizationName(QStringLiteral("Buschtrommel"));
-    app.setOrganizationName(QStringLiteral("buschmann23.de"));
+    app.setOrganizationName(QStringLiteral("Huessenbergnetz"));
+    app.setOrganizationDomain(QStringLiteral("huessenbergnetz.de"));
     app.setApplicationName(QStringLiteral("pbkdf2test"));
     app.setApplicationVersion(QStringLiteral(PBKDF2TEST_VERSION));
 
@@ -360,10 +358,10 @@ int main(int argc, char *argv[])
         salts.append(genRand(saltLength, true, allowedSaltChars));
     }
 
-    int totalTime = 0;
-    int min = std::numeric_limits<int>::max();
-    int max = std::numeric_limits<int>::min();
-    int avg = 0;
+    qint64 totalTime = 0.0;
+    qint64 min = std::numeric_limits<qint64>::max();
+    qint64 max = std::numeric_limits<qint64>::min();
+    qint64 avg = 0;
 
     const EVP_MD *ossld = openSSLDigest(md);
     const QCryptographicHash::Algorithm cld = cutelystDigest(md);
@@ -371,14 +369,15 @@ int main(int argc, char *argv[])
     for (int i = 0; i < testCount; ++i) {
         const QByteArray pw = passwords.at(i);
         const QByteArray salt = salts.at(i);
-        QDateTime t;
-        int tt = 0;
+        qint64 tt = 0.0;
 
         if (impl.compare(QLatin1String("cutelyst"), Qt::CaseInsensitive) == 0) {
 
-            t = QDateTime::currentDateTime();
+            auto start = std::chrono::high_resolution_clock::now();
             const QByteArray res = pbkdf2Cutelyst(cld, pw, salt, rounds, keyLength);
-            tt = t.msecsTo(QDateTime::currentDateTime());
+            auto end = std::chrono::high_resolution_clock::now();
+            tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
             printf("%s %ims\r", res.toBase64().constData(), tt);
             fflush(stdout);
 
@@ -390,14 +389,15 @@ int main(int argc, char *argv[])
             int usaltsize = salt.size();
             const char *ccpw = pw.constData();
             int ccpwsize = pw.size();
-            t = QDateTime::currentDateTime();
+            auto start = std::chrono::high_resolution_clock::now();
             const int ok = PKCS5_PBKDF2_HMAC(ccpw, ccpwsize, usalt, usaltsize, rounds, ossld, keyLength, out);
-            tt = t.msecsTo(QDateTime::currentDateTime());
+            auto end = std::chrono::high_resolution_clock::now();
+            tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             if (ok) {
                 for (size_t i = 0; i < keyLength; ++i) {
                     printf("%02x", out[i]);
                 }
-                printf(" %ims", tt);
+                printf(" %llims", tt);
                 printf("\r");
             }
             fflush(stdout);
@@ -406,9 +406,10 @@ int main(int argc, char *argv[])
         } else if (impl.compare(QLatin1String("crypt"), Qt::CaseInsensitive) == 0) {
 
             std::pair<QByteArray, uint> settings = cryptSettings(md, salt, rounds);
-            t = QDateTime::currentDateTime();
+            auto start = std::chrono::high_resolution_clock::now();
             const char *res = crypt(pw.constData(), settings.first.constData());
-            tt = t.msecsTo(QDateTime::currentDateTime());
+            auto end = std::chrono::high_resolution_clock::now();
+            tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             printf("%s %ims\r", res, tt);
             fflush(stdout);
 
@@ -422,12 +423,12 @@ int main(int argc, char *argv[])
 
     avg = (totalTime/testCount);
 
-    printf("Total time:            %5u ms\n", totalTime);
-    printf("Minimum time:          %5u ms\n", min);
-    printf("Maximum time:          %5u ms\n", max);
-    printf("Average time:          %5u ms\n", avg);
+    printf("Total time:            %5lli ms\n", totalTime);
+    printf("Minimum time:          %5lli ms\n", min);
+    printf("Maximum time:          %5lli ms\n", max);
+    printf("Average time:          %5lli ms\n", avg);
     if (avg != 0) {
-        printf("Proposed iterations:   %u\n", ((targetTime/avg) * rounds));
+        printf("Proposed iterations:   %lli\n", ((targetTime/avg) * rounds));
     }
 
     return 0;
