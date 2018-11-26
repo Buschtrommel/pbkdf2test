@@ -38,7 +38,7 @@
 /*!
  * \brief Generates random data.
  */
-static QByteArray genRand(qint64 size, bool b64 = true, const QByteArray &allowedChars = QByteArray())
+static QByteArray genRand(int size, bool b64 = true, const QByteArray &allowedChars = QByteArray())
 {
     QByteArray salt;
 
@@ -185,7 +185,7 @@ QCryptographicHash::Algorithm cutelystDigest(const QString &d)
     }
 }
 
-std::pair<QByteArray, uint> cryptSettings(const QString &d, const QByteArray &salt, quint32 rounds)
+std::pair<QByteArray, uint> cryptSettings(const QString &d, const QByteArray &salt, int rounds)
 {
     std::pair<QByteArray, uint> settings;
 
@@ -213,9 +213,9 @@ std::pair<QByteArray, uint> cryptSettings(const QString &d, const QByteArray &sa
         settings.first = setba;
 
         if (d.compare(QLatin1String("SHA-512"), Qt::CaseInsensitive) == 0) {
-            settings.second = (setba.size() + 86);
+            settings.second = static_cast<uint>(setba.size() + 86);
         } else {
-            settings.second = (setba.size() + 43);
+            settings.second = static_cast<uint>(setba.size() + 43);
         }
 
     } else {
@@ -346,9 +346,9 @@ int main(int argc, char *argv[])
 
     printf("Implementation:        %s\n", qUtf8Printable(impl));
     printf("Message digest:        %s\n", qUtf8Printable(md));
-    printf("Salt size:             %u bytes\n", saltLength);
-    printf("Key length:            %u bytes\n", keyLength);
-    printf("Target time:           %u ms\n", targetTime);
+    printf("Salt size:             %i bytes\n", saltLength);
+    printf("Key length:            %i bytes\n", keyLength);
+    printf("Target time:           %i ms\n", targetTime);
     printf("Generating %u hashes with %u iterations.\n", testCount, rounds);
     printf("--------------------------------------------------------------\n");
 
@@ -380,14 +380,14 @@ int main(int argc, char *argv[])
             auto end = std::chrono::high_resolution_clock::now();
             tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-            printf("%s %ims\r", res.toBase64().constData(), tt);
+            printf("%s %llims\r", res.toBase64().constData(), tt);
             fflush(stdout);
 
         } else if (impl.compare(QLatin1String("openssl"), Qt::CaseInsensitive) == 0) {
 
             unsigned char *out;
-            out = (unsigned char *) malloc(sizeof(unsigned char) * keyLength);
-            unsigned char *usalt = (unsigned char*)(salt.data());
+            out = static_cast<unsigned char *>(malloc(sizeof(unsigned char) * static_cast<ulong>(keyLength)));
+            unsigned char *usalt = reinterpret_cast<unsigned char *>(const_cast<char *>(salt.data()));
             int usaltsize = salt.size();
             const char *ccpw = pw.constData();
             int ccpwsize = pw.size();
@@ -396,7 +396,7 @@ int main(int argc, char *argv[])
             auto end = std::chrono::high_resolution_clock::now();
             tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
             if (ok) {
-                for (size_t i = 0; i < keyLength; ++i) {
+                for (int i = 0; i < keyLength; ++i) {
                     printf("%02x", out[i]);
                 }
                 printf(" %llims", tt);
@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
             const char *res = crypt(pw.constData(), settings.first.constData());
             auto end = std::chrono::high_resolution_clock::now();
             tt = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-            printf("%s %ims\r", res, tt);
+            printf("%s %llims\r", res, tt);
             fflush(stdout);
 
         }
@@ -425,12 +425,12 @@ int main(int argc, char *argv[])
 
     avg = (totalTime/testCount);
 
-    printf("Total time:            %5lli ms\n", totalTime);
-    printf("Minimum time:          %5lli ms\n", min);
-    printf("Maximum time:          %5lli ms\n", max);
-    printf("Average time:          %5lli ms\n", avg);
+    printf("Total time:            %7lli ms\n", totalTime);
+    printf("Minimum time:          %7lli ms\n", min);
+    printf("Maximum time:          %7lli ms\n", max);
+    printf("Average time:          %7lli ms\n", avg);
     if (avg != 0) {
-        printf("Proposed iterations:   %lli\n", ((targetTime/avg) * rounds));
+        printf("Proposed iterations:   %7lli\n", ((targetTime/avg) * rounds));
     }
 
     return 0;
